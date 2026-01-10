@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { INITIAL_FORM_STATE } from './constants';
 import { FormData, GalleryItem, HistoryMetadata } from './types';
@@ -102,10 +101,16 @@ export const App: React.FC = () => {
   }, [galleryItems, activeRenders]);
 
   const startRenderJob = async (item: GalleryItem) => {
+    // Evita processar item nulo ou que já esteja sendo processado
+    if (!item || activeRenders.includes(item.id)) return;
+
     setActiveRenders(prev => [...prev, item.id]);
     setGalleryItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'rendering' } : i));
 
     try {
+        // Pequeno delay para estabilização e evitar race conditions na UI
+        await new Promise(resolve => setTimeout(resolve, 500));
+
         const isCatalog = item.data.layout.toLowerCase().includes("catálogo") || item.data.promptPt.includes("sharp");
         
         const settings = item.creationSettings || {
@@ -141,11 +146,13 @@ export const App: React.FC = () => {
 
         const overrideEn = item.isRegenerated ? item.data.promptEn : undefined;
 
+        // ATENÇÃO: Passando referenceImages explicitamente agora
         const tech = await prepareTechnicalPrompt(
             item.data.promptPt,
             item.data.negativePt,
             // @ts-ignore
             finalSettings,
+            item.referenceImages || [], 
             overrideEn
         );
 
@@ -209,10 +216,12 @@ export const App: React.FC = () => {
         referenceImages: formData.referenceImages.length > 0 ? [...formData.referenceImages] : [],
         aspectRatio: formData.defaultAspectRatio,
         rotation: formData.defaultRotation,
+        
         // --- LÓGICA DE AUTO-RENDER ---
-        // Se isMore for falso (1ª leva), status é 'queued' (renderiza na hora)
-        // Se isMore for verdadeiro (+2 variações), status é 'draft' (fica parado)
+        // 1ª leva (isMore=false) -> 'queued' (renderiza auto)
+        // Variações (+2) -> 'draft' (espera clique)
         status: isMore ? 'draft' : 'queued',
+        
         renderMode: 'layer',
         creationSettings: {
             objective: formData.objective,
@@ -418,14 +427,14 @@ export const App: React.FC = () => {
       )}
 
       <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Coluna de Controles - REDUZIDA PARA 4 Colunas (aprox 33%) */}
-            <div className="lg:col-span-4 xl:col-span-4 space-y-6">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-8">
+            {/* Coluna de Controles - Ajustada para Tablet (md:col-span-5) e Desktop (xl:col-span-3) */}
+            <div className="md:col-span-5 lg:col-span-4 xl:col-span-3 space-y-6">
                 <Controls formData={formData} setFormData={setFormData} onGenerate={() => handleGeneratePrompts(false)} isGenerating={isGeneratingPrompts} />
             </div>
 
-            {/* Coluna da Galeria/Preview - AUMENTADA PARA 8 Colunas (aprox 66%) */}
-            <div className="lg:col-span-8 xl:col-span-8 space-y-6">
+            {/* Coluna da Galeria/Preview - Ajustada para Tablet (md:col-span-7) e Desktop (xl:col-span-9) */}
+            <div className="md:col-span-7 lg:col-span-8 xl:col-span-9 space-y-6">
                 <div className={`flex justify-between items-center p-4 rounded-xl border ${theme === 'dark' ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
                     <div>
                         <h2 className={`text-xl font-bold flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-zinc-900'}`}><Layers className="w-5 h-5 text-zinc-500" /> Fluxo de Criação</h2>

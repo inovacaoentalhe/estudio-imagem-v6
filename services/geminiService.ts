@@ -120,7 +120,11 @@ export const generateCreativePrompts = async (formData: FormData): Promise<Gener
         },
       });
 
-      const parsed = JSON.parse(response.text?.trim() || "[]");
+      // CLEANUP MARKDOWN (Fix comum para erros de JSON)
+      let text = response.text?.trim() || "[]";
+      text = text.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+      
+      const parsed = JSON.parse(text);
       return parsed;
   });
 };
@@ -129,6 +133,7 @@ export const prepareTechnicalPrompt = async (
   promptPt: string, 
   negativePt: string, 
   settings: any,
+  referenceImages: ReferenceImage[] = [], // Aceita imagens para verificar Hero
   overrideSceneEn?: string
 ): Promise<{ promptEn: string, negativeEn: string, finalPromptEn: string }> => {
   return executeWithRetry(async () => {
@@ -136,6 +141,7 @@ export const prepareTechnicalPrompt = async (
       let sceneEn = "";
       let sceneNegEn = "";
 
+      // 1. TRADUÇÃO PT -> EN (Essencial para qualidade do modelo Gemini Image)
       if (overrideSceneEn) {
          sceneEn = overrideSceneEn;
       } else {
@@ -147,92 +153,70 @@ export const prepareTechnicalPrompt = async (
                 responseSchema: { type: Type.OBJECT, properties: { promptEn: { type: Type.STRING }, negativeEn: { type: Type.STRING } } } 
             }
           });
-          const parsed = JSON.parse(trans.text?.trim() || `{"promptEn": "", "negativeEn": ""}`);
+          
+          let transText = trans.text?.trim() || `{"promptEn": "", "negativeEn": ""}`;
+          transText = transText.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
+          
+          const parsed = JSON.parse(transText);
           sceneEn = parsed.promptEn;
           sceneNegEn = parsed.negativeEn;
       }
 
       let blocks: string[] = [];
       
-      // 1. CENA PRINCIPAL
+      // 2. HERO IMAGE RULE (Explicitamente solicitado)
+      const hasHero = referenceImages && referenceImages.some(img => img.isHero);
+      if (hasHero) {
+          blocks.push(`[REFERENCE]: Hero image provided. Use it as the absolute source of truth for product geometry, details, and material.`);
+      }
+
+      // 3. CENA (Traduzida)
       blocks.push(`[SCENE]: ${sceneEn}`);
 
-      // 2. PROPS / ACESSÓRIOS
-      const propsList = settings.props && settings.props.length > 0 
-        ? `Surround the product with these high-quality props: ${settings.props.join(', ')}. Arrange them naturally, some items can slightly overlap the product (max 20%) to create depth.`
-        : '';
-      if (propsList) blocks.push(`[PROPS/ACCESSORIES]: ${propsList}`);
-      
-      // 3. ESTILO E TOM
-      const toneMap: any = {
-          'Chamativo': "Vibrant colors, high-energy, punchy contrast, pop art influence",
-          'Vendas': "Clean commercial product photography, e-commerce standard, balanced light",
-          'Minimalista': "Soft lighting, minimalist background, plenty of white/negative space, airy feel",
-          'Criativo': "Artistic shadows, editorial style, unique composition, dramatic flair",
-          'Promocional': "Bright retail focus, eye-catching, supermarket premium style",
-          'Institucional': "Premium corporate polish, trustworthy, elegant, neutral tones",
-          'Emocional': "Warm cinematic lighting, golden hour feel, cozy atmosphere"
-      };
-      const toneDesc = toneMap[settings.tone] || "Professional Studio";
-      blocks.push(`[STYLE/TONE]: ${toneDesc}`);
-
-      // 4. ILUMINAÇÃO E SOMBRAS
+      // 4. PARÂMETROS DE ESTÚDIO + ROTAÇÃO
+      // Incluindo Ângulo, Sombra e Rotação conforme solicitado
       const shadowMap: any = {
-        'Contato': "Hard contact shadows, grounded feel",
-        'Suave': "Soft diffused softbox lighting, gentle gradients, no harsh shadows",
-        'Média': "Balanced studio lighting, defined but soft shadows",
-        'Forte': "High contrast, dramatic chiaroscuro, sharp cast shadows",
-        'Nenhuma': "Floating product, shadowless lighting, isolation style"
+        'Contato': "Hard contact shadows", 'Suave': "Soft diffused lighting", 
+        'Média': "Balanced studio lighting", 'Forte': "High contrast shadows", 'Nenhuma': "Shadowless isolation"
       };
-      const shadowDesc = shadowMap[settings.shadow] || "Soft lighting";
-      blocks.push(`[LIGHTING]: ${shadowDesc}`);
+      const angleMap: any = { 
+        'Frente': "Frontal view, eye-level", '3/4': "3/4 isometric perspective", 'Topo': "Top-down flat lay" 
+      };
+      
+      const rot = settings.rotation || 0;
+      blocks.push(`[STUDIO_PARAMS]: Angle: ${angleMap[settings.angle] || "Eye level"}. Shadow: ${shadowMap[settings.shadow] || "Soft"}. Rotation: ${rot} degrees.`);
 
-      // 5. AMBIENTE / FUNDO (COM SUPORTE A CATÁLOGO)
+      // 5. CUSTOMIZATION / PERSONALIZAÇÃO
+      if (settings.customPersonalization) {
+          blocks.push(`[PERSONALIZATION_RULES]: ${settings.customPersonalization}`);
+      }
+
+      // 6. AMBIENTAÇÃO / FUNDO
       let bgDesc = "";
       if (settings.objective === 'Catálogo' && settings.catalogBackground) {
-          const catBgMap: any = {
-              'Branco Puro': 'Pure white background (HEX #FFFFFF), perfect isolation, no distractions',
-              'Estúdio': 'Professional grey studio cyclorama background, subtle gradient',
-              'Dia de Sol': 'Bright daylight setting, hard sun shadows, outdoor feel',
-              'Amarelado': 'Warm beige/yellowish background, organic feel',
-              'Escuro': 'Dark mode premium background, matte black/charcoal surface',
-              'Customizado': 'Neutral background customized'
-          };
-          bgDesc = catBgMap[settings.catalogBackground] || 'Pure white background';
+          bgDesc = `${settings.catalogBackground} background.`;
       } else if (settings.ambienceDescription) {
           bgDesc = settings.ambienceDescription;
       } else {
-          const bgMap: any = {
-             'Branco puro': 'Pure white background, hex #FFFFFF',
-             'Cinza studio': 'Neutral grey studio paper background',
-             'Off-white quente': 'Warm beige cream background, organic feel',
-             'Mármore claro': 'Carrara marble surface, luxury texture',
-             'Preto premium': 'Matte black premium background, luxury dark mode',
-             'Cena contextualizada': 'Blurred lifestyle background context'
-          };
-          bgDesc = bgMap[settings.background] || 'Professional Studio Setup';
+          bgDesc = settings.background || "Professional Studio";
       }
       blocks.push(`[BACKGROUND/ENVIRONMENT]: ${bgDesc}`);
 
-      // 6. CÂMERA E ÂNGULO
-      const angleMap: any = { 
-        'Frente': "Frontal view, eye-level straight on", 
-        '3/4': "3/4 isometric perspective view", 
-        'Topo': "Top-down flat lay view, 90 degree angle" 
-      };
-      blocks.push(`[CAMERA]: ${angleMap[settings.angle] || "Eye level"}. Sharp focus on product.`);
+      // 7. PROPS / ACESSÓRIOS
+      if (settings.props && settings.props.length > 0) {
+          blocks.push(`[PROPS]: Surround product with: ${settings.props.join(', ')}. Natural arrangement.`);
+      }
 
-      // 7. INTEGRAÇÃO DE TEXTO vs ESPAÇO NEGATIVO (CORRIGIDO PARA CATÁLOGO)
-      // Se for CATÁLOGO, ignoramos qualquer pedido de texto integrado e forçamos limpeza.
-      if (settings.marketingDirection === 'Texto integrado' && settings.objective !== 'Catálogo') {
-          blocks.push(`[TEXT_INTEGRATION]: Include the following text naturally in the composition using modern typography: 
+      // 8. DIREÇÃO DE ARTE & COPY DO POST
+      // Adiciona o texto se for "Texto integrado", caso contrário, pede limpeza.
+      if (settings.marketingDirection === 'Texto integrado') {
+          blocks.push(`[TEXT_OVERLAY]: Include the following text using modern typography: 
           TITLE: "${settings.copyTitle}"
           SUBTITLE: "${settings.copySubtitle}"
-          CTA: "${settings.copyOffer}"
-          Ensure text is legible, correctly spelled in Portuguese, and integrates with the scene perspective.`);
+          OFFER: "${settings.copyOffer}"
+          Ensure spelling is correct in Portuguese.`);
       } else {
-          // Se for Catálogo OU Modo 'Espaço Reservado'
-          blocks.push(`[COMPOSITION]: Leave 40% empty negative space for future text overlay. Do not generate any text. Clean composition.`);
+          blocks.push(`[COMPOSITION]: Leave negative space for text. Do not generate text.`);
           blocks.push(MANDATORY_STRINGS.NO_TEXT_ENFORCEMENT);
       }
 
