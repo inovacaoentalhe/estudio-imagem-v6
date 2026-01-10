@@ -1,4 +1,3 @@
-
 import React, { useState, useMemo } from 'react';
 import { AppMode, ArtStyle, CameraAngle, FormData, MarketingTone, ShadowType, TextPresence, Ambience, BackgroundType } from '../types';
 import { PROPS_OPTIONS } from '../constants';
@@ -27,6 +26,8 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
 
   const isSocial = formData.objective === AppMode.SOCIAL;
   const isPlaceholderMode = formData.marketingDirection === 'Espaço reservado';
+
+  const canGenerate = formData.productName.trim().length > 0;
 
   const handleChange = (field: keyof FormData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -128,8 +129,19 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
                 <BookOpen className="w-4 h-4 text-blue-400" /> Briefing do Produto
             </h3>
             <div className="grid grid-cols-2 gap-2">
-              <input type="text" value={formData.productName} onChange={e => handleChange('productName', e.target.value)} placeholder="Produto" className="bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" />
-              <input type="text" value={formData.material} onChange={e => handleChange('material', e.target.value)} placeholder="Material" className="bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" />
+                <div className="relative">
+                    <input 
+                        type="text" 
+                        value={formData.productName} 
+                        onChange={e => handleChange('productName', e.target.value)} 
+                        placeholder="Produto" 
+                        className={`bg-zinc-950 border rounded px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500 w-full ${formData.productName.trim().length === 0 ? 'border-red-900' : 'border-zinc-800'}`} 
+                    />
+                     {formData.productName.trim().length === 0 && (
+                        <span className="absolute right-3 top-2 text-[8px] text-red-500 font-bold">OBRIGATÓRIO</span>
+                    )}
+                </div>
+                <input type="text" value={formData.material} onChange={e => handleChange('material', e.target.value)} placeholder="Material" className="bg-zinc-950 border border-zinc-800 rounded px-3 py-1.5 text-xs text-white outline-none focus:border-blue-500" />
             </div>
 
             <textarea value={formData.userBrief} onChange={(e) => handleChange('userBrief', e.target.value)} placeholder="Ex: Clima rústico, luz lateral, para redes sociais..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-white h-20 outline-none resize-none focus:border-blue-500" />
@@ -264,8 +276,17 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
             </div>
           </div>
 
-          <button onClick={onGenerate} disabled={isGenerating || !formData.productName} className="w-full py-4 text-black rounded-xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 transition-all" style={{ backgroundColor: '#FCB82E' }}>
-            {isGenerating ? <Loader2 className="animate-spin h-5 w-5" /> : <Sparkles className="w-5 h-5" />} Gerar 2 Variações de Imagem
+          <button 
+            onClick={onGenerate} 
+            disabled={isGenerating || !canGenerate} 
+            className={`w-full py-4 text-black rounded-xl font-black text-sm uppercase tracking-widest shadow-xl flex items-center justify-center gap-3 transition-all ${
+                !canGenerate 
+                  ? 'bg-zinc-800 text-zinc-600 cursor-not-allowed' 
+                  : 'bg-[#FCB82E] hover:bg-[#e5a72a]'
+            }`}
+          >
+            {isGenerating ? <Loader2 className="animate-spin h-5 w-5" /> : <Sparkles className="w-5 h-5" />} 
+            {canGenerate ? "Gerar 2 Variações de Imagem" : "Preencha o Nome do Produto"}
           </button>
       </div>
     </div>

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { INITIAL_FORM_STATE } from './constants';
 import { FormData, GalleryItem, HistoryMetadata } from './types';
@@ -7,9 +6,18 @@ import { loadGalleryFromDB, saveGalleryToDB, clearGalleryDB, loadDraftFromDB, sa
 import { addToHistory, exportData, importData, clearHistory, getHistoryMetadata, getStoredAmbiences } from './services/persistenceService';
 import { Controls } from './components/Controls';
 import { Gallery } from './components/Gallery';
+import { Toast } from './components/Toast';
 import { Aperture, Info, Loader2, Plus, Play, Layers, RotateCcw, Settings, Download, Upload, Trash2, Database, X, Sun, Moon } from 'lucide-react';
 
 const MAX_CONCURRENCY = 1;
+
+// Helper Hook para Debounce
+const useDebouncedEffect = (effect: () => void, deps: any[], delay: number) => {
+  useEffect(() => {
+    const handler = setTimeout(effect, delay);
+    return () => clearTimeout(handler);
+  }, [...deps, delay]);
+};
 
 export const App: React.FC = () => {
   const [formData, setFormData] = useState<FormData>(INITIAL_FORM_STATE);
@@ -19,12 +27,17 @@ export const App: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [historyCount, setHistoryCount] = useState(0);
   const [theme, setTheme] = useState<'dark' | 'light'>('dark');
+  const [toast, setToast] = useState<{message: string, type: 'success'|'error'|'info'|'warning'} | null>(null);
   
   // Ref para input de arquivo (Import)
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Estado para controlar concorrência (IDs que estão rodando agora)
   const [activeRenders, setActiveRenders] = useState<string[]>([]);
+
+  const showToast = (message: string, type: 'success'|'error'|'info'|'warning') => {
+    setToast({ message, type });
+  };
 
   // INIT
   useEffect(() => {
@@ -48,13 +61,32 @@ export const App: React.FC = () => {
         // Atualiza contagem de histórico
         setHistoryCount(getHistoryMetadata().length);
 
-      } catch (err) { console.error(err); } finally { setIsLoadingDB(false); }
+      } catch (err: any) { 
+        console.error(err); 
+        showToast("Erro ao inicializar banco de dados local.", "error");
+      } finally { 
+        setIsLoadingDB(false); 
+      }
     };
     init();
   }, []);
 
-  useEffect(() => { if (!isLoadingDB) saveDraftToDB(formData); }, [formData, isLoadingDB]);
-  useEffect(() => { if (!isLoadingDB) saveGalleryToDB(galleryItems).catch(console.error); }, [galleryItems, isLoadingDB]);
+  // Salvamento Otimizado com Debounce
+  useDebouncedEffect(() => {
+    if (!isLoadingDB) {
+      saveDraftToDB(formData).catch(err => 
+        console.warn('Erro ao salvar rascunho:', err)
+      );
+    }
+  }, [formData, isLoadingDB], 1000); // Salva 1s após a última alteração
+
+  useDebouncedEffect(() => {
+    if (!isLoadingDB) {
+      saveGalleryToDB(galleryItems).catch(err => 
+        console.warn('Erro ao salvar galeria:', err)
+      );
+    }
+  }, [galleryItems, isLoadingDB], 1500); // Salva 1.5s após a última alteração
 
   // --- RENDER QUEUE WORKER ---
   useEffect(() => {
@@ -148,6 +180,7 @@ export const App: React.FC = () => {
     } catch (error: any) {
         console.error("Render error:", error);
         setGalleryItems(prev => prev.map(i => i.id === item.id ? { ...i, status: 'error' } : i));
+        showToast("Erro na renderização. Tente novamente.", "error");
     } finally {
         setActiveRenders(prev => prev.filter(id => id !== item.id));
     }
@@ -189,7 +222,12 @@ export const App: React.FC = () => {
         }
       }));
       setGalleryItems(prev => [...newItems, ...prev]);
-    } catch (error: any) { alert(error.message); } finally { setIsGeneratingPrompts(false); }
+      showToast("Prompts gerados! Revisão e criação disponíveis.", "success");
+    } catch (error: any) { 
+        showToast(`Erro ao gerar prompts: ${error.message}`, "error");
+    } finally { 
+        setIsGeneratingPrompts(false); 
+    }
   };
 
   const handleQueueAllPending = () => {
@@ -199,11 +237,18 @@ export const App: React.FC = () => {
           }
           return item;
       }));
+      showToast("Itens adicionados à fila de processamento.", "info");
   };
 
   const clearGallery = async () => {
     if(confirm("ATENÇÃO: Deseja apagar todo o histórico de versões desta sessão?")) {
-        try { await clearGalleryDB(); setGalleryItems([]); } catch (err) { alert("Erro ao limpar."); }
+        try { 
+            await clearGalleryDB(); 
+            setGalleryItems([]); 
+            showToast("Galeria limpa com sucesso.", "success");
+        } catch (err: any) { 
+            showToast("Erro ao limpar galeria.", "error"); 
+        }
     }
   };
 
@@ -216,26 +261,43 @@ export const App: React.FC = () => {
 
         try { await saveDraftToDB(INITIAL_FORM_STATE); } catch (e) { console.error(e); }
         window.scrollTo({ top: 0, behavior: 'smooth' });
+        showToast("Sessão reiniciada para novo produto.", "info");
     }
   };
 
   // --- DATA MANAGEMENT HANDLERS ---
-  const handleImport = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-      importData(file).then((restoredData) => {
-          alert("Backup restaurado com sucesso! Dados e configurações carregados.");
-          if (restoredData) {
-              setFormData(restoredData);
-          }
+      
+      try {
+        const restoredData = await importData(file);
+        
+        if (restoredData) {
+          setFormData(restoredData);
+          showToast('✅ Backup restaurado com sucesso! Carregando...', 'success');
+        } else {
+          showToast('✅ Backup restaurado parcialmente (Presets/Histórico).', 'info');
+        }
+        
+        // Recarrega a página após 2 segundos para garantir sincronização
+        setTimeout(() => {
           window.location.reload();
-      }).catch(() => alert("Falha na importação. Verifique se o arquivo é um backup válido v4.0."));
+        }, 2000);
+        
+      } catch (error: any) {
+        showToast(`❌ Falha na importação: ${error.message}`, 'error');
+      }
+      
+      // Limpa o input para permitir reimportar o mesmo arquivo
+      e.target.value = '';
   };
 
   const handleClearHistory = () => {
       if(confirm("Limpar todo o Histórico Leve (Metadados)? Isso não pode ser desfeito.")) {
           clearHistory();
           setHistoryCount(0);
+          showToast("Histórico leve apagado.", "warning");
       }
   };
 
@@ -244,6 +306,9 @@ export const App: React.FC = () => {
 
   return (
     <div className={`min-h-screen transition-colors duration-300 ${theme === 'dark' ? 'bg-zinc-950 text-white selection:bg-amber-500 selection:text-white' : 'bg-gray-50 text-zinc-900 selection:bg-amber-500 selection:text-white'}`}>
+      
+      {toast && <Toast {...toast} onClose={() => setToast(null)} />}
+
       <nav className={`border-b ${theme === 'dark' ? 'border-zinc-800 bg-zinc-950/80' : 'border-zinc-200 bg-white/80'} backdrop-blur-md sticky top-0 z-50 transition-colors`}>
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <div className="flex items-center gap-2">
