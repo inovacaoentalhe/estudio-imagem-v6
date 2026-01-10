@@ -44,6 +44,8 @@ export enum ShadowType {
   NONE = 'Nenhuma',
 }
 
+export type CatalogBackgroundType = 'Branco Puro' | 'Estúdio' | 'Dia de Sol' | 'Amarelado' | 'Escuro' | 'Customizado';
+
 export enum BackgroundType {
   WHITE = 'Branco puro',
   GREY = 'Cinza studio',
@@ -99,6 +101,7 @@ export interface FormData {
   angle: CameraAngle;
   shadow: ShadowType;
   background: BackgroundType;
+  catalogBackground?: CatalogBackgroundType; // Novo campo específico para catálogo
   props: string[];
   customProps: string;
   
@@ -139,6 +142,16 @@ export interface GeneratedPrompt {
   finalPromptEn?: string; 
 }
 
+// Configuração visual da Layer de Texto
+export interface TextLayerConfig {
+  yPercent: number; // Posição vertical em % (0-100)
+  visible: boolean;
+  scale: number; // Multiplicador de tamanho
+  color?: string; // Cor do texto (Hex)
+}
+
+export type TextStyle = 'modern' | 'classic' | 'bold' | 'ribbon' | 'banner';
+
 export interface GalleryItem {
   id: string;
   timestamp: number;
@@ -152,10 +165,21 @@ export interface GalleryItem {
   isEdited?: boolean;
   status: 'draft' | 'queued' | 'rendering' | 'completed' | 'error';
   
+  // Configuração visual persistente dos textos
+  textLayerSettings?: {
+    title: TextLayerConfig;
+    subtitle: TextLayerConfig;
+    offer: TextLayerConfig;
+  };
+
+  textStyle?: TextStyle; // Novo campo para estilo do texto
+  renderMode?: 'integrated' | 'layer'; // Novo campo para modo de renderização
+
   // Snapshot para regeneração determinística
   creationSettings?: {
     objective: AppMode;
     background: BackgroundType;
+    catalogBackground?: CatalogBackgroundType;
     shadow: ShadowType;
     angle: CameraAngle;
     props: string[];
@@ -187,6 +211,7 @@ export interface Preset {
   angle: CameraAngle;
   shadow: ShadowType;
   background: BackgroundType;
+  catalogBackground?: CatalogBackgroundType;
 
   propsEnabled: boolean;
   propsList: string[];

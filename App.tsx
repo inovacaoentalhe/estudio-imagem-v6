@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { INITIAL_FORM_STATE } from './constants';
 import { FormData, GalleryItem, HistoryMetadata } from './types';
@@ -189,7 +190,11 @@ export const App: React.FC = () => {
   // --- ACTIONS ---
 
   const handleGeneratePrompts = async (isMore: boolean = false) => {
-    if (!formData.productName) return;
+    if (!formData.productName) {
+        showToast("Por favor, digite o nome do produto.", "warning");
+        return;
+    }
+
     setIsGeneratingPrompts(true);
     try {
       const results = await generateCreativePrompts(formData);
@@ -204,7 +209,11 @@ export const App: React.FC = () => {
         referenceImages: formData.referenceImages.length > 0 ? [...formData.referenceImages] : [],
         aspectRatio: formData.defaultAspectRatio,
         rotation: formData.defaultRotation,
-        status: 'draft',
+        // --- LÓGICA DE AUTO-RENDER ---
+        // Se isMore for falso (1ª leva), status é 'queued' (renderiza na hora)
+        // Se isMore for verdadeiro (+2 variações), status é 'draft' (fica parado)
+        status: isMore ? 'draft' : 'queued',
+        renderMode: 'layer',
         creationSettings: {
             objective: formData.objective,
             background: formData.background,
@@ -222,7 +231,13 @@ export const App: React.FC = () => {
         }
       }));
       setGalleryItems(prev => [...newItems, ...prev]);
-      showToast("Prompts gerados! Revisão e criação disponíveis.", "success");
+
+      if (!isMore) {
+        showToast("Primeira leva enviada para renderização automática!", "success");
+      } else {
+        showToast("Novas variações geradas como rascunho. Clique em 'Criar' para renderizar.", "info");
+      }
+
     } catch (error: any) { 
         showToast(`Erro ao gerar prompts: ${error.message}`, "error");
     } finally { 
@@ -402,13 +417,15 @@ export const App: React.FC = () => {
         </div>
       )}
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-            <div className="lg:col-span-5 xl:col-span-5 space-y-6">
+            {/* Coluna de Controles - REDUZIDA PARA 4 Colunas (aprox 33%) */}
+            <div className="lg:col-span-4 xl:col-span-4 space-y-6">
                 <Controls formData={formData} setFormData={setFormData} onGenerate={() => handleGeneratePrompts(false)} isGenerating={isGeneratingPrompts} />
             </div>
 
-            <div className="lg:col-span-7 xl:col-span-7 space-y-6">
+            {/* Coluna da Galeria/Preview - AUMENTADA PARA 8 Colunas (aprox 66%) */}
+            <div className="lg:col-span-8 xl:col-span-8 space-y-6">
                 <div className={`flex justify-between items-center p-4 rounded-xl border ${theme === 'dark' ? 'bg-zinc-900/50 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm'}`}>
                     <div>
                         <h2 className={`text-xl font-bold flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-zinc-900'}`}><Layers className="w-5 h-5 text-zinc-500" /> Fluxo de Criação</h2>

@@ -1,12 +1,12 @@
+
 import React, { useState, useMemo } from 'react';
-import { AppMode, ArtStyle, CameraAngle, FormData, MarketingTone, ShadowType, TextPresence, Ambience, BackgroundType } from '../types';
-import { PROPS_OPTIONS } from '../constants';
+import { AppMode, ArtStyle, CameraAngle, FormData, MarketingTone, ShadowType, TextPresence, Ambience, BackgroundType, CatalogBackgroundType } from '../types';
 import { generateStructuredBrief } from '../services/geminiService';
 import { saveStoredAmbience, deleteStoredAmbience } from '../services/persistenceService';
 import { 
-  Sparkles, Layers, Megaphone, Package, BookOpen, RefreshCw, 
+  Sparkles, Layers, Megaphone, BookOpen, RefreshCw, 
   Layout, Palette, ChevronDown, Plus, Trash2, Settings2,
-  Bookmark, Info, Loader2, Lock, Eraser, Type
+  Lock, X, Loader2
 } from 'lucide-react';
 import { ReferenceUpload } from './ReferenceUpload';
 import { PresetsModule } from './PresetsModule';
@@ -23,8 +23,10 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
   const [newAmbTitle, setNewAmbTitle] = useState('');
   const [newAmbDesc, setNewAmbDesc] = useState('');
   const [showAllAmbiences, setShowAllAmbiences] = useState(false);
+  const [newPropInput, setNewPropInput] = useState('');
 
   const isSocial = formData.objective === AppMode.SOCIAL;
+  const isCatalog = formData.objective === AppMode.CATALOG;
   const isPlaceholderMode = formData.marketingDirection === 'Espaço reservado';
 
   const canGenerate = formData.productName.trim().length > 0;
@@ -35,14 +37,33 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
 
   const handleModeChange = (mode: AppMode) => {
       let newAspectRatio = formData.defaultAspectRatio;
-      if (mode === AppMode.CATALOG) newAspectRatio = '1:1';
-      if (mode === AppMode.SOCIAL) newAspectRatio = '3:4';
+      let newMarketingDirection = formData.marketingDirection;
+
+      if (mode === AppMode.CATALOG) {
+          newAspectRatio = '1:1';
+          newMarketingDirection = 'Espaço reservado'; // FORÇA LIMPEZA NO CATÁLOGO
+      }
+      if (mode === AppMode.SOCIAL) {
+          newAspectRatio = '3:4';
+      }
 
       setFormData(prev => ({
           ...prev,
           objective: mode,
-          defaultAspectRatio: newAspectRatio
+          defaultAspectRatio: newAspectRatio,
+          marketingDirection: newMarketingDirection
       }));
+  };
+
+  const addProp = () => {
+    if (newPropInput.trim()) {
+        setFormData(prev => ({ ...prev, props: [...prev.props, newPropInput.trim()] }));
+        setNewPropInput('');
+    }
+  };
+
+  const removeProp = (prop: string) => {
+    setFormData(prev => ({ ...prev, props: prev.props.filter(p => p !== prop) }));
   };
 
   const handleGenerateBrief = async () => {
@@ -103,7 +124,8 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
   }, [allAmbiences]);
 
   return (
-    <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl animate-fade-in overflow-hidden max-h-[125vh] flex flex-col">
+    // AUMENTADO max-h-[175vh] PARA REDUZIR SCROLL INTERNO
+    <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl animate-fade-in overflow-hidden max-h-[175vh] flex flex-col">
       <PresetsModule formData={formData} setFormData={setFormData} />
 
       <div className="p-6 space-y-8 overflow-y-auto custom-scrollbar flex-1">
@@ -146,6 +168,31 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
 
             <textarea value={formData.userBrief} onChange={(e) => handleChange('userBrief', e.target.value)} placeholder="Ex: Clima rústico, luz lateral, para redes sociais..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-white h-20 outline-none resize-none focus:border-blue-500" />
 
+            {/* Módulo de Props */}
+            <div className="space-y-2 bg-zinc-950 p-3 rounded-lg border border-zinc-800">
+                <label className="text-[10px] font-bold text-zinc-400 uppercase">Acessórios de Cena (Props)</label>
+                <div className="flex gap-2">
+                    <input 
+                        type="text" 
+                        value={newPropInput}
+                        onChange={(e) => setNewPropInput(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && addProp()}
+                        placeholder="Ex: Alecrim, Fumaça, Tecido..." 
+                        className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-amber-500"
+                    />
+                    <button onClick={addProp} className="p-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded"><Plus className="w-4 h-4" /></button>
+                </div>
+                {formData.props.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                        {formData.props.map(prop => (
+                            <span key={prop} className="bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-[10px] text-zinc-300 flex items-center gap-1 group">
+                                {prop} <X className="w-3 h-3 cursor-pointer text-zinc-500 group-hover:text-red-400" onClick={() => removeProp(prop)} />
+                            </span>
+                        ))}
+                    </div>
+                )}
+            </div>
+
             <button onClick={handleGenerateBrief} disabled={!formData.productName} className="w-full bg-zinc-800 hover:bg-zinc-700 text-[10px] font-black uppercase text-zinc-300 py-3 rounded-lg flex items-center justify-center gap-2 border border-zinc-700 transition-all">
               {isGeneratingBriefing ? <RefreshCw className="animate-spin w-3 h-3" /> : <Sparkles className="w-3 h-3 text-[#FCB82E]" />} Gerar Briefing & Copy (Flash AI)
             </button>
@@ -159,43 +206,54 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
           </div>
 
           {/* 3. POST SOCIAL / COPY / ARTE */}
-          {isSocial && (
-            <div className="space-y-6 pt-4 border-t border-zinc-800 animate-slide-up">
-                <div className="space-y-4">
-                  <h3 className="text-sm font-semibold text-[#FCB82E] flex items-center gap-2"><Layout className="w-4 h-4" /> Direção de Arte</h3>
-                  <div className="grid grid-cols-2 gap-3">
-                      <button onClick={() => handleChange('marketingDirection', 'Texto integrado')} className={`py-2 px-3 rounded-lg border text-[10px] font-black uppercase transition-all ${formData.marketingDirection === 'Texto integrado' ? 'bg-amber-900/20 border-[#FCB82E] text-[#FCB82E]' : 'bg-zinc-950 border-zinc-800 text-zinc-500'}`}>Texto Integrado</button>
-                      <button onClick={() => handleChange('marketingDirection', 'Espaço reservado')} className={`py-2 px-3 rounded-lg border text-[10px] font-black uppercase transition-all ${formData.marketingDirection === 'Espaço reservado' ? 'bg-amber-900/20 border-[#FCB82E] text-[#FCB82E]' : 'bg-zinc-950 border-zinc-800 text-zinc-500'}`}>Espaço Reservado</button>
-                  </div>
-                  
-                  {!isPlaceholderMode && (
-                      <div className="grid grid-cols-2 gap-4">
-                          <div className="space-y-1">
-                              <label className="text-[9px] font-bold text-zinc-500 uppercase">Tom de Marketing</label>
-                              <select value={formData.tone} onChange={e => handleChange('tone', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-[10px] text-zinc-300 outline-none">
-                                  {Object.values(MarketingTone).map(t => <option key={t} value={t}>{t}</option>)}
-                              </select>
-                          </div>
-                          <div className="space-y-1">
-                              <label className="text-[9px] font-bold text-zinc-500 uppercase">Presença Texto</label>
-                              <select value={formData.textPresence} onChange={e => handleChange('textPresence', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-[10px] text-zinc-300 outline-none">
-                                  {Object.values(TextPresence).map(p => <option key={p} value={p}>{p}</option>)}
-                              </select>
-                          </div>
-                      </div>
-                  )}
+          <div className="space-y-6 pt-4 border-t border-zinc-800 animate-slide-up">
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-[#FCB82E] flex items-center gap-2"><Layout className="w-4 h-4" /> Direção de Arte</h3>
+                <div className="grid grid-cols-2 gap-3">
+                    {/* Botão TEXTO INTEGRADO - Desabilitado se for Catálogo */}
+                    <button 
+                        onClick={() => !isCatalog && handleChange('marketingDirection', 'Texto integrado')} 
+                        className={`py-2 px-3 rounded-lg border text-[10px] font-black uppercase transition-all ${
+                            formData.marketingDirection === 'Texto integrado' 
+                            ? 'bg-amber-900/20 border-[#FCB82E] text-[#FCB82E]' 
+                            : isCatalog ? 'bg-zinc-900 border-zinc-800 text-zinc-700 cursor-not-allowed' : 'bg-zinc-950 border-zinc-800 text-zinc-500'
+                        }`}
+                        title={isCatalog ? "Não disponível em modo Catálogo" : "Texto fundido na imagem pela IA"}
+                    >
+                        Texto Integrado {isCatalog && "(N/A)"}
+                    </button>
+                    <button onClick={() => handleChange('marketingDirection', 'Espaço reservado')} className={`py-2 px-3 rounded-lg border text-[10px] font-black uppercase transition-all ${formData.marketingDirection === 'Espaço reservado' ? 'bg-amber-900/20 border-[#FCB82E] text-[#FCB82E]' : 'bg-zinc-950 border-zinc-800 text-zinc-500'}`}>Espaço Reservado</button>
                 </div>
-
-                {!isPlaceholderMode && (
-                    <div className="space-y-3 animate-fade-in">
-                        <h3 className="text-sm font-semibold text-purple-400 flex items-center gap-2"><Megaphone className="w-4 h-4" /> Copy do Post</h3>
-                        <input value={formData.socialCopyTitle} onChange={e => handleChange('socialCopyTitle', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-white text-xs" placeholder="Título Impactante" />
-                        <input value={formData.socialCopySubtitle} onChange={e => handleChange('socialCopySubtitle', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-white text-xs" placeholder="Subtítulo Descritivo" />
-                        <input value={formData.socialCopyOffer} onChange={e => handleChange('socialCopyOffer', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-white text-xs" placeholder="Oferta / CTA" />
+                
+                {!isPlaceholderMode && !isCatalog && (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-zinc-500 uppercase">Tom de Marketing</label>
+                            <select value={formData.tone} onChange={e => handleChange('tone', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-[10px] text-zinc-300 outline-none">
+                                {Object.values(MarketingTone).map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <div className="space-y-1">
+                            <label className="text-[9px] font-bold text-zinc-500 uppercase">Presença Texto</label>
+                            <select value={formData.textPresence} onChange={e => handleChange('textPresence', e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 rounded px-2 py-1.5 text-[10px] text-zinc-300 outline-none">
+                                {Object.values(TextPresence).map(p => <option key={p} value={p}>{p}</option>)}
+                            </select>
+                        </div>
                     </div>
                 )}
+              </div>
 
-                {/* 4. AMBIENTAÇÃO VISUAL */}
+              {!isPlaceholderMode && !isCatalog && (
+                  <div className="space-y-3 animate-fade-in">
+                      <h3 className="text-sm font-semibold text-purple-400 flex items-center gap-2"><Megaphone className="w-4 h-4" /> Copy do Post</h3>
+                      <input value={formData.socialCopyTitle} onChange={e => handleChange('socialCopyTitle', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-white text-xs" placeholder="Título Impactante" />
+                      <input value={formData.socialCopySubtitle} onChange={e => handleChange('socialCopySubtitle', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-white text-xs" placeholder="Subtítulo Descritivo" />
+                      <input value={formData.socialCopyOffer} onChange={e => handleChange('socialCopyOffer', e.target.value)} className="w-full bg-zinc-950 border border-zinc-700 rounded px-3 py-2 text-white text-xs" placeholder="Oferta / CTA" />
+                  </div>
+              )}
+
+              {/* 4. AMBIENTAÇÃO VISUAL (SOCIAL) */}
+              {isSocial && (
                 <div className="space-y-4 pt-4 border-t border-zinc-800">
                     <div className="flex justify-between items-center">
                         <h3 className="text-sm font-semibold text-emerald-400 flex items-center gap-2">
@@ -251,7 +309,31 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
                         <button onClick={handleAddCustomAmbience} disabled={!newAmbTitle || !newAmbDesc} className="w-full bg-emerald-600 text-white text-[10px] font-black uppercase py-2 rounded-lg transition-all disabled:opacity-30">Salvar Ambientação</button>
                     </div>
                 </div>
-            </div>
+              )}
+          </div>
+
+          {/* PARTE ESPECÍFICA PARA CATÁLOGO - SELETOR DE FUNDO */}
+          {isCatalog && (
+              <div className="space-y-4 pt-4 border-t border-zinc-800">
+                  <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
+                      <Palette className="w-4 h-4" /> Fundo do Catálogo
+                  </h3>
+                  <div className="grid grid-cols-2 gap-2">
+                      {['Branco Puro', 'Estúdio', 'Dia de Sol', 'Amarelado', 'Escuro', 'Customizado'].map((bg) => (
+                          <button
+                            key={bg}
+                            onClick={() => handleChange('catalogBackground', bg)}
+                            className={`p-2 rounded text-[10px] font-bold uppercase transition-all ${
+                                formData.catalogBackground === bg 
+                                ? 'bg-blue-900/40 border border-blue-500 text-blue-400' 
+                                : 'bg-zinc-950 border border-zinc-800 text-zinc-500 hover:bg-zinc-900'
+                            }`}
+                          >
+                              {bg}
+                          </button>
+                      ))}
+                  </div>
+              </div>
           )}
 
           {/* 5. PARÂMETROS TÉCNICOS */}
