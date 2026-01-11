@@ -6,7 +6,7 @@ import { saveStoredAmbience, deleteStoredAmbience } from '../services/persistenc
 import { 
   Sparkles, Layers, Megaphone, BookOpen, RefreshCw, 
   Layout, Palette, ChevronDown, Plus, Trash2, Settings2,
-  Lock, X, Loader2
+  Lock, X, Loader2, MagicWand
 } from 'lucide-react';
 import { ReferenceUpload } from './ReferenceUpload';
 import { PresetsModule } from './PresetsModule';
@@ -15,10 +15,19 @@ interface ControlsProps {
   formData: FormData;
   setFormData: React.Dispatch<React.SetStateAction<FormData>>;
   onGenerate: () => void;
+  onAutoComplete: () => void;
   isGenerating: boolean;
+  isApplyingSuggestions: boolean;
 }
 
-export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGenerate, isGenerating }) => {
+export const Controls: React.FC<ControlsProps> = ({ 
+  formData, 
+  setFormData, 
+  onGenerate, 
+  onAutoComplete,
+  isGenerating, 
+  isApplyingSuggestions 
+}) => {
   const [isGeneratingBriefing, setIsGeneratingBriefing] = useState(false);
   const [newAmbTitle, setNewAmbTitle] = useState('');
   const [newAmbDesc, setNewAmbDesc] = useState('');
@@ -41,7 +50,7 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
 
       if (mode === AppMode.CATALOG) {
           newAspectRatio = '1:1';
-          newMarketingDirection = 'Espaço reservado'; // FORÇA LIMPEZA NO CATÁLOGO
+          newMarketingDirection = 'Espaço reservado';
       }
       if (mode === AppMode.SOCIAL) {
           newAspectRatio = '3:4';
@@ -124,12 +133,10 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
   }, [allAmbiences]);
 
   return (
-    // AUMENTADO max-h-[175vh] PARA REDUZIR SCROLL INTERNO
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl animate-fade-in overflow-hidden max-h-[175vh] flex flex-col">
       <PresetsModule formData={formData} setFormData={setFormData} />
 
       <div className="p-6 space-y-8 overflow-y-auto custom-scrollbar flex-1">
-          {/* 1. OBJETIVO */}
           <div className="border-b border-zinc-800 pb-4 flex justify-between items-center">
               <h2 className="text-xl font-bold text-white flex items-center gap-2">
                 <Layers className="w-5 h-5 text-[#FCB82E]" /> Objetivo
@@ -145,7 +152,6 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
 
           <ReferenceUpload formData={formData} setFormData={setFormData} />
 
-          {/* 2. BRIEFING */}
           <div className="space-y-4 pt-4 border-t border-zinc-800">
             <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">
                 <BookOpen className="w-4 h-4 text-blue-400" /> Briefing do Produto
@@ -168,34 +174,19 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
 
             <textarea value={formData.userBrief} onChange={(e) => handleChange('userBrief', e.target.value)} placeholder="Ex: Clima rústico, luz lateral, para redes sociais..." className="w-full bg-zinc-950 border border-zinc-800 rounded-lg p-3 text-xs text-white h-20 outline-none resize-none focus:border-blue-500" />
 
-            {/* Módulo de Props */}
-            <div className="space-y-2 bg-zinc-950 p-3 rounded-lg border border-zinc-800">
-                <label className="text-[10px] font-bold text-zinc-400 uppercase">Acessórios de Cena (Props)</label>
-                <div className="flex gap-2">
-                    <input 
-                        type="text" 
-                        value={newPropInput}
-                        onChange={(e) => setNewPropInput(e.target.value)}
-                        onKeyDown={(e) => e.key === 'Enter' && addProp()}
-                        placeholder="Ex: Alecrim, Fumaça, Tecido..." 
-                        className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-amber-500"
-                    />
-                    <button onClick={addProp} className="p-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded"><Plus className="w-4 h-4" /></button>
-                </div>
-                {formData.props.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                        {formData.props.map(prop => (
-                            <span key={prop} className="bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-[10px] text-zinc-300 flex items-center gap-1 group">
-                                {prop} <X className="w-3 h-3 cursor-pointer text-zinc-500 group-hover:text-red-400" onClick={() => removeProp(prop)} />
-                            </span>
-                        ))}
-                    </div>
-                )}
+            <div className="grid grid-cols-1 gap-2">
+              <button onClick={handleGenerateBrief} disabled={!formData.productName || isGeneratingBriefing} className="w-full bg-zinc-800 hover:bg-zinc-700 text-[10px] font-black uppercase text-zinc-300 py-3 rounded-lg flex items-center justify-center gap-2 border border-zinc-700 transition-all">
+                {isGeneratingBriefing ? <Loader2 className="animate-spin w-3 h-3" /> : <Sparkles className="w-3 h-3 text-[#FCB82E]" />} Gerar Briefing (Fast AI)
+              </button>
+              
+              <button 
+                onClick={onAutoComplete} 
+                disabled={isApplyingSuggestions || (!formData.finalBriefPt && !formData.userBrief)}
+                className="w-full bg-amber-900/10 hover:bg-amber-900/20 text-[10px] font-black uppercase text-amber-500 py-3 rounded-lg flex items-center justify-center gap-2 border border-amber-900/30 transition-all"
+              >
+                {isApplyingSuggestions ? <Loader2 className="animate-spin w-3 h-3" /> : <Sparkles className="w-3 h-3" />} Auto-completar do Briefing
+              </button>
             </div>
-
-            <button onClick={handleGenerateBrief} disabled={!formData.productName} className="w-full bg-zinc-800 hover:bg-zinc-700 text-[10px] font-black uppercase text-zinc-300 py-3 rounded-lg flex items-center justify-center gap-2 border border-zinc-700 transition-all">
-              {isGeneratingBriefing ? <RefreshCw className="animate-spin w-3 h-3" /> : <Sparkles className="w-3 h-3 text-[#FCB82E]" />} Gerar Briefing & Copy (Flash AI)
-            </button>
 
             {formData.finalBriefPt && (
                 <div className="p-2 bg-zinc-950 rounded border border-zinc-800">
@@ -205,12 +196,10 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
             )}
           </div>
 
-          {/* 3. POST SOCIAL / COPY / ARTE */}
           <div className="space-y-6 pt-4 border-t border-zinc-800 animate-slide-up">
               <div className="space-y-4">
                 <h3 className="text-sm font-semibold text-[#FCB82E] flex items-center gap-2"><Layout className="w-4 h-4" /> Direção de Arte</h3>
                 <div className="grid grid-cols-2 gap-3">
-                    {/* Botão TEXTO INTEGRADO - Desabilitado se for Catálogo */}
                     <button 
                         onClick={() => !isCatalog && handleChange('marketingDirection', 'Texto integrado')} 
                         className={`py-2 px-3 rounded-lg border text-[10px] font-black uppercase transition-all ${
@@ -218,14 +207,14 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
                             ? 'bg-amber-900/20 border-[#FCB82E] text-[#FCB82E]' 
                             : isCatalog ? 'bg-zinc-900 border-zinc-800 text-zinc-700 cursor-not-allowed' : 'bg-zinc-950 border-zinc-800 text-zinc-500'
                         }`}
-                        title={isCatalog ? "Não disponível em modo Catálogo" : "Texto fundido na imagem pela IA"}
+                        title={isCatalog ? "Não disponível em modo Catálogo" : "Texto integrado"}
                     >
                         Texto Integrado {isCatalog && "(N/A)"}
                     </button>
                     <button onClick={() => handleChange('marketingDirection', 'Espaço reservado')} className={`py-2 px-3 rounded-lg border text-[10px] font-black uppercase transition-all ${formData.marketingDirection === 'Espaço reservado' ? 'bg-amber-900/20 border-[#FCB82E] text-[#FCB82E]' : 'bg-zinc-950 border-zinc-800 text-zinc-500'}`}>Espaço Reservado</button>
                 </div>
                 
-                {!isPlaceholderMode && !isCatalog && (
+                {!isCatalog && (
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                             <label className="text-[9px] font-bold text-zinc-500 uppercase">Tom de Marketing</label>
@@ -252,7 +241,6 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
                   </div>
               )}
 
-              {/* 4. AMBIENTAÇÃO VISUAL (SOCIAL) */}
               {isSocial && (
                 <div className="space-y-4 pt-4 border-t border-zinc-800">
                     <div className="flex justify-between items-center">
@@ -312,7 +300,30 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
               )}
           </div>
 
-          {/* PARTE ESPECÍFICA PARA CATÁLOGO - SELETOR DE FUNDO */}
+          <div className="space-y-2 bg-zinc-950 p-3 rounded-lg border border-zinc-800">
+              <label className="text-[10px] font-bold text-zinc-400 uppercase">Acessórios de Cena (Props)</label>
+              <div className="flex gap-2">
+                  <input 
+                      type="text" 
+                      value={newPropInput}
+                      onChange={(e) => setNewPropInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && addProp()}
+                      placeholder="Ex: Alecrim, Fumaça, Tecido..." 
+                      className="flex-1 bg-zinc-900 border border-zinc-800 rounded px-2 py-1.5 text-xs text-white outline-none focus:border-amber-500"
+                  />
+                  <button onClick={addProp} className="p-1.5 bg-amber-600 hover:bg-amber-500 text-white rounded"><Plus className="w-4 h-4" /></button>
+              </div>
+              {formData.props.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                      {formData.props.map(prop => (
+                          <span key={prop} className="bg-zinc-800 border border-zinc-700 px-2 py-1 rounded text-[10px] text-zinc-300 flex items-center gap-1 group">
+                              {prop} <X className="w-3 h-3 cursor-pointer text-zinc-500 group-hover:text-red-400" onClick={() => removeProp(prop)} />
+                          </span>
+                      ))}
+                  </div>
+              )}
+          </div>
+
           {isCatalog && (
               <div className="space-y-4 pt-4 border-t border-zinc-800">
                   <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
@@ -336,12 +347,10 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
               </div>
           )}
 
-          {/* 5. PARÂMETROS TÉCNICOS */}
           <div className="space-y-4 pt-4 border-t border-zinc-800">
             <h3 className="text-sm font-semibold text-blue-400 flex items-center gap-2">
                 <Settings2 className="w-4 h-4" /> Parâmetros Studio
             </h3>
-            
             <div className="grid grid-cols-2 gap-4">
                 <div>
                     <label className="block text-[10px] font-bold text-zinc-500 mb-1 uppercase">Ângulo</label>
@@ -368,7 +377,7 @@ export const Controls: React.FC<ControlsProps> = ({ formData, setFormData, onGen
             }`}
           >
             {isGenerating ? <Loader2 className="animate-spin h-5 w-5" /> : <Sparkles className="w-5 h-5" />} 
-            {canGenerate ? "Gerar 2 Variações de Imagem" : "Preencha o Nome do Produto"}
+            {canGenerate ? "Gerar 2 Variações" : "Preencha o Nome"}
           </button>
       </div>
     </div>

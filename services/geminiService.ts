@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, Type } from "@google/genai";
-import { FormData, GeneratedPrompt, AppMode, ArtStyle, AspectRatio, TextPresence, CameraAngle, ShadowType, MarketingTone, Ambience, ReferenceImage, RotationDegree, BackgroundType } from "../types";
-import { MANDATORY_STRINGS, ASPECT_RATIO_TECHNICAL_TEXTS, BASE_BRIEF_TEXT } from "../constants";
+import { FormData, GeneratedPrompt, ReferenceImage, AspectRatio, AppMode } from "../types";
+import { MANDATORY_STRINGS } from "../constants";
 
 const getAiClient = () => {
   if (!process.env.API_KEY) {
@@ -29,24 +29,19 @@ export const correctPortuguese = async (text: string): Promise<string> => {
       const ai = getAiClient();
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: `Corrija estritamente a gramática e ortografia PT-BR do seguinte briefing técnico, mantendo o sentido original: "${text}"`,
-        config: { systemInstruction: "Você é um revisor ortográfico PT-BR sênior especializado em marketing." }
+        contents: `Corrija estritamente a gramática PT-BR deste briefing de imagem, sem mudar o sentido técnico: "${text}"`,
+        config: { systemInstruction: "Você é um revisor técnico de marketing." }
       });
       return response.text?.trim() || text;
   });
 };
 
-export const generateStructuredBrief = async (formData: FormData): Promise<any> => {
+export const suggestFieldsFromBriefing = async (formData: FormData): Promise<Partial<FormData>> => {
   return executeWithRetry(async () => {
     const ai = getAiClient();
-    const prompt = `
-    ATUE COMO DIRETOR DE MARKETING E FOTOGRAFIA SÊNIOR.
-    Gere um Briefing Final e sugestões de COPY atraentes.
-    PRODUTO: ${formData.productName} | MATERIAL: ${formData.material}
-    MODO: ${formData.objective} | ESTILO: ${formData.style}
-    USER INPUT: ${formData.userBrief}
-    TAREFA: Retorne JSON com brief_pt (instrução técnica imagem) e copy_pt (title, subtitle, offer).
-    `;
+    const briefingText = formData.finalBriefPt || formData.userBrief || "Produto genérico";
+    const prompt = `Analise: "${briefingText}". Sugira JSON: objective (Catálogo ou Post Social), angle, shadow, background, tone.`;
+    
     const response = await ai.models.generateContent({
       model: 'gemini-3-flash-preview',
       contents: prompt,
@@ -55,42 +50,40 @@ export const generateStructuredBrief = async (formData: FormData): Promise<any> 
         responseSchema: {
           type: Type.OBJECT,
           properties: {
-            brief_pt: { type: Type.STRING },
-            copy_pt: {
-              type: Type.OBJECT,
-              properties: {
-                title: { type: Type.STRING },
-                subtitle: { type: Type.STRING },
-                offer: { type: Type.STRING }
-              },
-              required: ["title", "subtitle", "offer"]
-            }
-          },
-          required: ["brief_pt", "copy_pt"]
+            objective: { type: Type.STRING },
+            angle: { type: Type.STRING },
+            shadow: { type: Type.STRING },
+            background: { type: Type.STRING },
+            tone: { type: Type.STRING }
+          }
         }
       }
     });
-    return JSON.parse(response.text?.trim() || "{}");
+    return JSON.parse(response.text || "{}");
   });
 };
 
 export const generateCreativePrompts = async (formData: FormData): Promise<GeneratedPrompt[]> => {
   return executeWithRetry(async () => {
       const ai = getAiClient();
-      const allAmbiences = [...formData.suggestedAmbiences, ...formData.customAmbiences];
-      const activeAmbience = allAmbiences.find(a => a.id === formData.selectedAmbienceId);
-      const heroImage = formData.referenceImages.find(img => img.isHero);
+      const isCatalog = formData.objective === AppMode.CATALOG;
       
-      const systemInstruction = `Você é um Engenheiro de Prompts especialista em fotografia de produto.
-      Gere 2 variações REALMENTE DIFERENTES para o produto ${formData.productName}.
-      As variações DEVEM mudar: iluminação, composição/ângulo e fundo/superfície.
-      AMBIENTAÇÃO OBRIGATÓRIA: ${activeAmbience?.description || "Estúdio profissional clássico"}.
-      MODO: ${formData.objective}. TOM: ${formData.tone}.
-      TEXTO: Use ${formData.textPresence}. Reserve espaço negativo apropriado.
-      REGRAS CRÍTICAS: ZERO TEXTO NA IMAGEM. NUNCA gere letras ou números.
-      Se o modo for 'Texto integrado', crie copy Title, Subtitle e Offer criativos por variação.`;
+      const systemInstruction = `Você é um Engenheiro de Prompts.
+      OBJETIVO: ${formData.objective}.
+      REGRAS: 
+      - Se for Catálogo: Fundo BRANCO OU CINZA NEUTRO apenas. Sem cenários. Sem pessoas. Foco total no produto.
+      - Se for Social: Criar ambientação realista.
+      - NUNCA adicionar texto decorativo na imagem, EXCETO se solicitado especificamente na PERSONALIZAÇÃO.
+      - FIDELIDADE: O produto deve ter os mesmos entalhes e logos da referência, A MENOS que o campo de PERSONALIZAÇÃO solicite alteração.`;
 
-      const parts: any[] = [{ text: `Briefing base: ${formData.finalBriefPt || formData.userBrief || "Produto premium"}` }];
+      const parts: any[] = [{ 
+        text: `Gere 2 variações para: ${formData.productName}. 
+        Material: ${formData.material}.
+        Briefing: ${formData.userBrief}.
+        ALTERAÇÕES DE PERSONALIZAÇÃO/SOBREPOSIÇÃO: ${formData.customPersonalization || "Manter original da referência"}.` 
+      }];
+      
+      const heroImage = formData.referenceImages.find(img => img.isHero);
       if (heroImage) {
           parts.push({ inlineData: { mimeType: heroImage.mimeType, data: heroImage.dataUrl.split(',')[1] } });
       }
@@ -109,140 +102,136 @@ export const generateCreativePrompts = async (formData: FormData): Promise<Gener
                 layout: { type: Type.STRING },
                 promptPt: { type: Type.STRING },
                 negativePt: { type: Type.STRING },
-                highlights: { type: Type.STRING },
-                copyTitle: { type: Type.STRING },
-                copySubtitle: { type: Type.STRING },
-                copyOffer: { type: Type.STRING }
-              },
-              required: ["layout", "promptPt", "negativePt", "highlights"]
+                highlights: { type: Type.STRING }
+              }
             }
           }
         },
       });
 
-      // CLEANUP MARKDOWN (Fix comum para erros de JSON)
-      let text = response.text?.trim() || "[]";
-      text = text.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-      
-      const parsed = JSON.parse(text);
-      return parsed;
+      return JSON.parse(response.text || "[]");
   });
 };
 
 export const prepareTechnicalPrompt = async (
-  promptPt: string, 
-  negativePt: string, 
+  promptPt: string,
+  negativePt: string,
   settings: any,
-  referenceImages: ReferenceImage[] = [], // Aceita imagens para verificar Hero
-  overrideSceneEn?: string
-): Promise<{ promptEn: string, negativeEn: string, finalPromptEn: string }> => {
-  return executeWithRetry(async () => {
-      const ai = getAiClient();
-      let sceneEn = "";
-      let sceneNegEn = "";
+  referenceImages: ReferenceImage[]
+) => {
+  const isCatalog = settings.objective === AppMode.CATALOG;
+  const ai = getAiClient();
 
-      // 1. TRADUÇÃO PT -> EN (Essencial para qualidade do modelo Gemini Image)
-      if (overrideSceneEn) {
-         sceneEn = overrideSceneEn;
-      } else {
-          const trans = await ai.models.generateContent({
-            model: "gemini-3-flash-preview",
-            contents: `Translate to Image Prompt English: "${promptPt}". Negative: "${negativePt}"`,
-            config: { 
-                responseMimeType: "application/json",
-                responseSchema: { type: Type.OBJECT, properties: { promptEn: { type: Type.STRING }, negativeEn: { type: Type.STRING } } } 
-            }
-          });
-          
-          let transText = trans.text?.trim() || `{"promptEn": "", "negativeEn": ""}`;
-          transText = transText.replace(/^```json/, '').replace(/^```/, '').replace(/```$/, '').trim();
-          
-          const parsed = JSON.parse(transText);
-          sceneEn = parsed.promptEn;
-          sceneNegEn = parsed.negativeEn;
-      }
-
-      let blocks: string[] = [];
-      
-      // 2. HERO IMAGE RULE (Explicitamente solicitado)
-      const hasHero = referenceImages && referenceImages.some(img => img.isHero);
-      if (hasHero) {
-          blocks.push(`[REFERENCE]: Hero image provided. Use it as the absolute source of truth for product geometry, details, and material.`);
-      }
-
-      // 3. CENA (Traduzida)
-      blocks.push(`[SCENE]: ${sceneEn}`);
-
-      // 4. PARÂMETROS DE ESTÚDIO + ROTAÇÃO
-      // Incluindo Ângulo, Sombra e Rotação conforme solicitado
-      const shadowMap: any = {
-        'Contato': "Hard contact shadows", 'Suave': "Soft diffused lighting", 
-        'Média': "Balanced studio lighting", 'Forte': "High contrast shadows", 'Nenhuma': "Shadowless isolation"
-      };
-      const angleMap: any = { 
-        'Frente': "Frontal view, eye-level", '3/4': "3/4 isometric perspective", 'Topo': "Top-down flat lay" 
-      };
-      
-      const rot = settings.rotation || 0;
-      blocks.push(`[STUDIO_PARAMS]: Angle: ${angleMap[settings.angle] || "Eye level"}. Shadow: ${shadowMap[settings.shadow] || "Soft"}. Rotation: ${rot} degrees.`);
-
-      // 5. CUSTOMIZATION / PERSONALIZAÇÃO
-      if (settings.customPersonalization) {
-          blocks.push(`[PERSONALIZATION_RULES]: ${settings.customPersonalization}`);
-      }
-
-      // 6. AMBIENTAÇÃO / FUNDO
-      let bgDesc = "";
-      if (settings.objective === 'Catálogo' && settings.catalogBackground) {
-          bgDesc = `${settings.catalogBackground} background.`;
-      } else if (settings.ambienceDescription) {
-          bgDesc = settings.ambienceDescription;
-      } else {
-          bgDesc = settings.background || "Professional Studio";
-      }
-      blocks.push(`[BACKGROUND/ENVIRONMENT]: ${bgDesc}`);
-
-      // 7. PROPS / ACESSÓRIOS
-      if (settings.props && settings.props.length > 0) {
-          blocks.push(`[PROPS]: Surround product with: ${settings.props.join(', ')}. Natural arrangement.`);
-      }
-
-      // 8. DIREÇÃO DE ARTE & COPY DO POST
-      // Adiciona o texto se for "Texto integrado", caso contrário, pede limpeza.
-      if (settings.marketingDirection === 'Texto integrado') {
-          blocks.push(`[TEXT_OVERLAY]: Include the following text using modern typography: 
-          TITLE: "${settings.copyTitle}"
-          SUBTITLE: "${settings.copySubtitle}"
-          OFFER: "${settings.copyOffer}"
-          Ensure spelling is correct in Portuguese.`);
-      } else {
-          blocks.push(`[COMPOSITION]: Leave negative space for text. Do not generate text.`);
-          blocks.push(MANDATORY_STRINGS.NO_TEXT_ENFORCEMENT);
-      }
-
-      const finalPromptEn = `${blocks.join('\n\n')}\n\n[NEGATIVE]: ${sceneNegEn}, ${MANDATORY_STRINGS.NEGATIVE_SUFFIX}`.trim();
-
-      return { promptEn: sceneEn, negativeEn: sceneNegEn, finalPromptEn };
+  // Tradução do prompt principal
+  const translation = await ai.models.generateContent({
+    model: 'gemini-3-flash-preview',
+    contents: `Translate to English focusing ONLY on technical visual description (materials, lighting, sharpness), DO NOT add creative flair: "${promptPt}"`
   });
+  const promptEnTranslated = translation.text || promptPt;
+
+  // Tradução da personalização se existir
+  let customizationEn = "";
+  if (settings.customPersonalization) {
+    const customTrans = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: `Translate this specific product customization instruction to technical English: "${settings.customPersonalization}"`
+    });
+    customizationEn = customTrans.text || settings.customPersonalization;
+  }
+
+  const customizationBlock = customizationEn 
+    ? `CUSTOM PERSONALIZATION (PRIORITY OVERRIDE): ${customizationEn}. Change only the specific part mentioned, keeping all other product traits from the reference.` 
+    : "";
+
+  // Montagem do Prompt com base na Hierarquia de Autoridade
+  let finalPromptEn = `
+    PRODUCT PHOTOGRAPHY, 8K RESOLUTION. 
+    ${MANDATORY_STRINGS.FIDELITY_RULES}
+    ${customizationBlock}
+    
+    OBJECTIVE: ${isCatalog ? MANDATORY_STRINGS.CATALOG : MANDATORY_STRINGS.SOCIAL}
+    
+    TECHNICAL SPECS:
+    - Angle: ${settings.angle}
+    - Shadow: ${settings.shadow}
+    - Lighting: Professional Studio Light.
+    - Background: ${isCatalog ? (settings.catalogBackground || "Pure solid white studio background, no scenery") : (settings.background || "Realistic environment")}.
+    
+    CONTENT:
+    - Main Subject: ${promptEnTranslated}
+    - Material Details: Must preserve original textures and engravings.
+    - Props: ${settings.props?.length > 0 ? `Include ${settings.props.join(", ")} logically placed on or near the product.` : "NO PROPS."}
+    
+    ${(settings.customPersonalization || settings.marketingDirection === 'Texto integrado') ? "" : MANDATORY_STRINGS.NO_TEXT_ENFORCEMENT}
+  `.replace(/\s+/g, " ").trim();
+
+  return {
+    promptEn: promptEnTranslated,
+    negativeEn: `${MANDATORY_STRINGS.NEGATIVE_SUFFIX}, ${negativePt}`,
+    finalPromptEn: finalPromptEn
+  };
 };
 
 export const generateImageFromPrompt = async (
   finalPromptEn: string,
-  referenceImages?: ReferenceImage[],
-  aspectRatio: AspectRatio = "1:1"
+  referenceImages: ReferenceImage[],
+  aspectRatio: AspectRatio
 ): Promise<string> => {
   return executeWithRetry(async () => {
       const ai = getAiClient();
       const parts: any[] = [{ text: finalPromptEn }];
-      if (referenceImages?.length) {
-        referenceImages.forEach(img => parts.push({ inlineData: { data: img.dataUrl.split(',')[1], mimeType: img.mimeType } }));
+      
+      const hero = referenceImages.find(img => img.isHero);
+      if (hero) {
+          parts.push({ 
+            inlineData: { 
+              data: hero.dataUrl.split(',')[1], 
+              mimeType: hero.mimeType 
+            } 
+          });
       }
+      
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash-image',
         contents: { parts },
-        config: { imageConfig: { aspectRatio: aspectRatio as any } },
+        config: { 
+            imageConfig: { aspectRatio: aspectRatio as any } 
+        },
       });
-      const part = response.candidates?.[0]?.content.parts.find(p => p.inlineData);
-      return `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
+
+      const imagePart = response.candidates?.[0]?.content?.parts.find(p => p.inlineData);
+      if (!imagePart?.inlineData) throw new Error("Image generation failed.");
+      
+      return `data:${imagePart.inlineData.mimeType};base64,${imagePart.inlineData.data}`;
+  });
+};
+
+export const generateStructuredBrief = async (formData: FormData): Promise<any> => {
+  return executeWithRetry(async () => {
+    const ai = getAiClient();
+    const prompt = `Gere brief_pt e copy_pt (title, subtitle, offer) para ${formData.productName}. MODO: ${formData.objective}. JSON.`;
+    
+    const response = await ai.models.generateContent({
+      model: 'gemini-3-flash-preview',
+      contents: prompt,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: {
+          type: Type.OBJECT,
+          properties: {
+            brief_pt: { type: Type.STRING },
+            copy_pt: {
+              type: Type.OBJECT,
+              properties: {
+                title: { type: Type.STRING },
+                subtitle: { type: Type.STRING },
+                offer: { type: Type.STRING }
+              }
+            }
+          }
+        }
+      }
+    });
+    return JSON.parse(response.text || "{}");
   });
 };

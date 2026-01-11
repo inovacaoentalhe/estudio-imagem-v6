@@ -15,9 +15,9 @@ export const PROPS_OPTIONS = [
 export const BASE_BRIEF_TEXT = `[REGRAS VISUAIS FIXAS - INOVAÇÃO ENTALHE]:
 1. Fotografia profissional de estúdio, alta resolução (8k), texturas realistas.
 2. Iluminação controlada para valorizar o relevo e o material do produto.
-3. Sem distorções de lente (exceto se solicitado ângulo wide).
-4. Cores fiéis ao material (madeira, metal, couro).
-5. Limpeza visual: sem ruído, sem artefatos, foco cravado no produto.`;
+3. Sem distorções de lente.
+4. Cores e entalhes fiéis ao material original.
+5. Limpeza visual absoluta em modo catálogo.`;
 
 export const INITIAL_FORM_STATE: FormData = {
   productName: "",
@@ -60,25 +60,22 @@ export const INITIAL_FORM_STATE: FormData = {
 };
 
 export const MANDATORY_STRINGS = {
-  CATALOG: "Entire product must be fully sharp and in focus. No depth of field blur. No cinematic blur. No bokeh. High clarity, high definition, product-focused sharpness. Minimalist technical photography.",
-  SOCIAL: "High-end commercial look. Controlled highlights and shadows. Professional studio lighting, 8k resolution, premium textures.",
+  CATALOG: "PURE CATALOG PHOTOGRAPHY. NO SCENERY. NO ENVIRONMENT. NO BACKGROUND ELEMENTS. The product must be on a totally neutral, clean, solid background (pure white or studio grey). Focus on product geometry and materials only. Technical lighting.",
+  SOCIAL: "High-end commercial marketing post. Realistic environment. Professional studio lighting, 8k resolution, premium textures.",
   
-  // REGRA DE OURO: ZERO TEXTO
-  NEGATIVE_SUFFIX: "text, typography, letters, numbers, symbols, writing, watermark, logo, signature, blurry, distorted, low quality, warped, extra parts, text errors, unreadable, artistic blur, depth of field, vignette, dark corners, altered product, changed logo, missing engraving, wrong proportions, different design, morphing, words, alphabets, kanji, characters.",
+  NEGATIVE_SUFFIX: "text, typography, letters, numbers, symbols, writing, watermark, logo, signature, blurry, distorted, low quality, warped, extra parts, unreadable, artistic blur, depth of field, vignette, dark corners, altered product shape, changed logo, missing engraving, wrong proportions, morphing, words, alphabets.",
   
-  FIDELITY_RULES: "CRITICAL: Use the attached reference image as the EXACT product reference. Do not change the product design, proportions, engravings, texts, or logos. The attached image defines the final product geometry. NO REDESIGN ALLOWED. Preserve exact material details.",
-  REFERENCE_LOGIC: "The HERO image defines the absolute geometry. Additional images are only for contour understanding.",
+  FIDELITY_RULES: "CRITICAL: The attached HERO image is the ABSOLUTE geometry reference. DO NOT CHANGE product design, engravings, text on wood, or logos. The product in the generated image must be IDENTICAL to the reference image in terms of shape, material, and personalization details.",
   
-  // Frase de Controle Absoluto
-  NO_TEXT_ENFORCEMENT: "No text, no typography, no letters, no numbers, no symbols, no writing of any kind. Clean image only. All text will be added in post-production. DO NOT RENDER TEXT."
+  NO_TEXT_ENFORCEMENT: "DO NOT RENDER ANY TEXT. Clean image only. No letters, no symbols."
 };
 
 export const ASPECT_RATIO_TECHNICAL_TEXTS: Record<AspectRatio, string> = {
   '1:1': "Square aspect ratio (1:1), centered composition.",
-  '3:4': "Vertical aspect ratio (3:4), portrait composition for feed. Reserve vertical space.",
-  '4:5': "Vertical aspect ratio (4:5), optimized for Instagram feed.",
-  '9:16': "Tall vertical aspect ratio (9:16), optimized for Stories and Reels. Extensive vertical negative space.",
-  '16:9': "Widescreen aspect ratio (16:9), cinematic landscape format."
+  '3:4': "Vertical aspect ratio (3:4).",
+  '4:5': "Vertical aspect ratio (4:5).",
+  '9:16': "Tall vertical aspect ratio (9:16).",
+  '16:9': "Widescreen aspect ratio (16:9)."
 };
 
 export const ASPECT_RATIOS: AspectRatio[] = ['1:1', '3:4', '4:5', '9:16', '16:9'];
@@ -110,78 +107,9 @@ export const SYSTEM_PRESETS: Preset[] = [
     showNegativePrompts: true
   },
   {
-    id: 'sys_catalogo_premium',
-    name: 'Catálogo — Premium Studio (Cinza)',
-    description: 'Fundo cinza estúdio, iluminação de contato, ângulo 3/4 valorizando volume.',
-    isSystem: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    mode: AppMode.CATALOG,
-    style: ArtStyle.HIGHLIGHT,
-    marketingDirection: 'Espaço reservado',
-    copyTone: MarketingTone.MINIMALIST,
-    aspectRatio: '1:1',
-    angle: CameraAngle.THREE_QUARTERS,
-    shadow: ShadowType.CONTACT,
-    background: BackgroundType.GREY,
-    propsEnabled: true,
-    propsList: ["Sal grosso", "Temperos secos"],
-    propsPolicy: 'restrito',
-    useReferenceImages: true,
-    lockProductFidelity: true,
-    defaultRotation: 0,
-    showNegativePrompts: true
-  },
-  {
-    id: 'sys_social_bold',
-    name: 'Post Social — Bold Impacto',
-    description: 'Alto contraste, sombras médias, ideal para anúncios de performance.',
-    isSystem: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    mode: AppMode.SOCIAL,
-    style: ArtStyle.BOLD,
-    marketingDirection: 'Espaço reservado',
-    copyTone: MarketingTone.ATTENTION,
-    aspectRatio: '3:4',
-    angle: CameraAngle.THREE_QUARTERS,
-    shadow: ShadowType.MEDIUM,
-    background: BackgroundType.BLACK_PREMIUM,
-    propsEnabled: false,
-    propsList: [],
-    propsPolicy: 'livre',
-    useReferenceImages: true,
-    lockProductFidelity: true,
-    defaultRotation: 0,
-    showNegativePrompts: true
-  },
-  {
-    id: 'sys_social_promo',
-    name: 'Post Social — Promo Vende Agora',
-    description: 'Texto integrado (Overlay), cores vibrantes, ângulo frontal direto.',
-    isSystem: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    mode: AppMode.SOCIAL,
-    style: ArtStyle.PROMO,
-    marketingDirection: 'Texto integrado',
-    copyTone: MarketingTone.PROMOTIONAL,
-    aspectRatio: '4:5',
-    angle: CameraAngle.FRONT,
-    shadow: ShadowType.STRONG,
-    background: BackgroundType.OFF_WHITE,
-    propsEnabled: false,
-    propsList: [],
-    propsPolicy: 'livre',
-    useReferenceImages: true,
-    lockProductFidelity: true,
-    defaultRotation: 0,
-    showNegativePrompts: true
-  },
-  {
     id: 'sys_social_scene',
-    name: 'Post Social — Scene Churrasco',
-    description: 'Ambientação rica, props de contexto, luz suave de janela.',
+    name: 'Post Social — Churrasco Realista',
+    description: 'Ambientação de churrasco, carnes sobre a tábua, luz natural.',
     isSystem: true,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -194,31 +122,8 @@ export const SYSTEM_PRESETS: Preset[] = [
     shadow: ShadowType.SOFT,
     background: BackgroundType.SCENE_CONTEXT,
     propsEnabled: true,
-    propsList: ["Carne", "Sal grosso", "Fumaça leve", "Madeira rústica"],
+    propsList: ["Carne fatiada", "Sal grosso"],
     propsPolicy: 'livre',
-    useReferenceImages: true,
-    lockProductFidelity: true,
-    defaultRotation: 0,
-    showNegativePrompts: true
-  },
-  {
-    id: 'sys_banner_inst',
-    name: 'Banner Site — 16:9 Institucional',
-    description: 'Formato wide, minimalista, limpo para header de site.',
-    isSystem: true,
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    mode: AppMode.CATALOG,
-    style: ArtStyle.MINIMALIST,
-    marketingDirection: 'Espaço reservado',
-    copyTone: MarketingTone.MINIMALIST,
-    aspectRatio: '16:9',
-    angle: CameraAngle.FRONT,
-    shadow: ShadowType.SOFT,
-    background: BackgroundType.OFF_WHITE,
-    propsEnabled: false,
-    propsList: [],
-    propsPolicy: 'restrito',
     useReferenceImages: true,
     lockProductFidelity: true,
     defaultRotation: 0,
